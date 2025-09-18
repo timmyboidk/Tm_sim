@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conway's Game of Life</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #00aaff;
+        }
+        
+        canvas {
+            border: 2px solid #00aaff;
+            background-color: #000;
+        }
+        
+        .controls {
+            margin-top: 20px;
+        }
+        
+        button {
+            background-color: #00aaff;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 0 10px;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #0088cc;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Conway's Game of Life</h1>
+    <canvas id="gameCanvas"></canvas>
+    <div class="controls">
+        <button id="startStopBtn">Start</button>
+        <button id="stepBtn">Step</button>
+        <button id="resetBtn">Reset</button>
+    </div>
+
+    <script>
+        // --- Simulation Constants (Feel free to customize) ---
+        const GRID_SIZE = 100; // Number of cells in each row/column
+        const CELL_SIZE = 8; // Size of each cell in pixels
+        const ALIVE_COLOR = "#00aaff";
+        const DEAD_COLOR = "#101010";
+        const INITIAL_DENSITY = 0.3; // Probability of a cell being alive at the start
+        // --------------------------------------------------------
+
+        // Get the canvas element and its 2D rendering context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set the canvas dimensions
+        canvas.width = GRID_SIZE * CELL_SIZE;
+        canvas.height = GRID_SIZE * CELL_SIZE;
+
+        // --- Simulation State ---
+        let grid;
+        let isRunning = false;
+        let animationId;
+        // -------------------------
+
+        // --- Core Functions ---
+
+        /** Creates and returns a new grid, randomly populated. */
+        function createGrid() {
+            // Create a 2D array filled with 0s
+            const newGrid = new Array(GRID_SIZE).fill(null)
+                .map(() => new Array(GRID_SIZE).fill(0));
+
+            // Randomly populate the grid
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    if (Math.random() < INITIAL_DENSITY) {
+                        newGrid[i][j] = 1; // 1 for alive
+                    }
+                }
+            }
+            return newGrid;
+        }
+
+        /** Draws the current state of the grid onto the canvas. */
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    ctx.fillStyle = grid[i][j] ? ALIVE_COLOR : DEAD_COLOR;
+                    ctx.fillRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
+                }
+            }
+        }
+
+        /** Calculates the next state of the grid based on the rules. */
+        function nextGeneration() {
+            const nextGrid = grid.map(arr => [...arr]); // Create a copy of the grid
+
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    let neighborCount = 0;
+                    // Check all 8 neighbors
+                    for (let x = -1; x <= 1; x++) {
+                        for (let y = -1; y <= 1; y++) {
+                            if (x === 0 && y === 0) continue; // Skip the cell itself
+                            const ni = (i + x + GRID_SIZE) % GRID_SIZE;
+                            const nj = (j + y + GRID_SIZE) % GRID_SIZE;
+                            neighborCount += grid[ni][nj];
+                        }
+                    }
+
+                    // Apply the rules of the game
+                    if (grid[i][j] === 1 && (neighborCount < 2 || neighborCount > 3)) {
+                        nextGrid[i][j] = 0; // A live cell dies
+                    } else if (grid[i][j] === 0 && neighborCount === 3) {
+                        nextGrid[i][j] = 1; // A dead cell becomes alive
+                    }
+                }
+            }
+            grid = nextGrid; // Update the main grid
+        }
+
+        /** The main animation loop. */
+        function update() {
+            if (!isRunning) return; // Stop the loop if paused
+            nextGeneration();
+            drawGrid();
+            animationId = requestAnimationFrame(update); // Schedule the next frame
+        }
+
+        // --- Button Controls ---
+        const startStopBtn = document.getElementById('startStopBtn');
+        const stepBtn = document.getElementById('stepBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        startStopBtn.addEventListener('click', () => {
+            isRunning = !isRunning;
+            if (isRunning) {
+                startStopBtn.textContent = 'Stop';
+                update(); // Start the animation loop
+            } else {
+                startStopBtn.textContent = 'Start';
+                cancelAnimationFrame(animationId); // Stop the animation loop
+            }
+        });
+
+        stepBtn.addEventListener('click', () => {
+            if (!isRunning) {
+                nextGeneration();
+                drawGrid();
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            isRunning = false;
+            startStopBtn.textContent = 'Start';
+            cancelAnimationFrame(animationId);
+            grid = createGrid();
+            drawGrid();
+        });
+
+        // --- Initial Setup ---
+        grid = createGrid();
+        drawGrid();
+    </script>
+</body>
+
+</html>
