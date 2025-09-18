@@ -3,35 +3,29 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conway's Game of Life</title>
+    <title>TM Simulation Demo</title>
     <style>
         body {
             background-color: #1a1a1a;
             color: #f0f0f0;
             font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            text-align: center;
             margin: 0;
             padding: 20px;
         }
         
         h1 {
-            color: #00aaff;
+            color: #4CAF50;
         }
         
         canvas {
-            border: 2px solid #00aaff;
+            border: 2px solid #4CAF50;
             background-color: #000;
-        }
-        
-        .controls {
-            margin-top: 20px;
+            margin-bottom: 15px;
         }
         
         button {
-            background-color: #00aaff;
+            background-color: #4CAF50;
             color: #fff;
             border: none;
             padding: 10px 20px;
@@ -43,144 +37,238 @@
         }
         
         button:hover {
-            background-color: #0088cc;
+            background-color: #45a049;
+        }
+        
+        #explanation {
+            color: #f0f0f0;
+            min-height: 40px;
+            font-size: 1.1em;
         }
     </style>
 </head>
 
 <body>
 
-    <h1>Conway's Game of Life</h1>
-    <canvas id="gameCanvas"></canvas>
+    <h1>TM B Simulating TM A: Conceptual Demo</h1>
+    <canvas id="tmCanvas"></canvas>
     <div class="controls">
-        <button id="startStopBtn">Start</button>
-        <button id="stepBtn">Step</button>
+        <button id="stepBtn">Run One Step</button>
+        <button id="carryBtn">Trigger Carry Operation</button>
+        <button id="densityBtn">Fix Head Density</button>
         <button id="resetBtn">Reset</button>
     </div>
+    <p id="explanation">Press a button to see a part of the simulation.</p>
 
     <script>
-        // --- Simulation Constants (Feel free to customize) ---
-        const GRID_SIZE = 100; // Number of cells in each row/column
-        const CELL_SIZE = 8; // Size of each cell in pixels
-        const ALIVE_COLOR = "#00aaff";
-        const DEAD_COLOR = "#101010";
-        const INITIAL_DENSITY = 0.3; // Probability of a cell being alive at the start
-        // --------------------------------------------------------
-
-        // Get the canvas element and its 2D rendering context
-        const canvas = document.getElementById('gameCanvas');
+        const canvas = document.getElementById('tmCanvas');
         const ctx = canvas.getContext('2d');
+        const explanationEl = document.getElementById('explanation');
 
-        // Set the canvas dimensions
-        canvas.width = GRID_SIZE * CELL_SIZE;
-        canvas.height = GRID_SIZE * CELL_SIZE;
+        // --- Visual & State Constants ---
+        const CELL_COUNT = 10;
+        const CELL_SIZE = 80;
+        const FIELD_HEIGHT = 40;
+        const HEAD_RADIUS = 12;
 
-        // --- Simulation State ---
-        let grid;
-        let isRunning = false;
-        let animationId;
-        // -------------------------
+        canvas.width = CELL_COUNT * CELL_SIZE;
+        canvas.height = 4 * FIELD_HEIGHT;
 
-        // --- Core Functions ---
+        let state = {};
 
-        /** Creates and returns a new grid, randomly populated. */
-        function createGrid() {
-            // Create a 2D array filled with 0s
-            const newGrid = new Array(GRID_SIZE).fill(null)
-                .map(() => new Array(GRID_SIZE).fill(0));
-
-            // Randomly populate the grid
-            for (let i = 0; i < GRID_SIZE; i++) {
-                for (let j = 0; j < GRID_SIZE; j++) {
-                    if (Math.random() < INITIAL_DENSITY) {
-                        newGrid[i][j] = 1; // 1 for alive
-                    }
-                }
-            }
-            return newGrid;
-        }
-
-        /** Draws the current state of the grid onto the canvas. */
+        // --- Drawing Functions ---
         function drawGrid() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
-            for (let i = 0; i < GRID_SIZE; i++) {
-                for (let j = 0; j < GRID_SIZE; j++) {
-                    ctx.fillStyle = grid[i][j] ? ALIVE_COLOR : DEAD_COLOR;
-                    ctx.fillRect(j * CELL_SIZE, i * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
-                }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const fieldLabels = ["A's Tape", "h Counter", "v Counter", "Return"];
+            for (let i = 0; i < 4; i++) {
+                ctx.strokeStyle = '#444';
+                ctx.strokeRect(0, i * FIELD_HEIGHT, canvas.width, FIELD_HEIGHT);
+                ctx.fillStyle = '#999';
+                ctx.fillText(fieldLabels[i], 5, i * FIELD_HEIGHT + 15);
+            }
+            for (let i = 0; i < CELL_COUNT; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, canvas.height);
+                ctx.stroke();
             }
         }
 
-        /** Calculates the next state of the grid based on the rules. */
-        function nextGeneration() {
-            const nextGrid = grid.map(arr => [...arr]); // Create a copy of the grid
-
-            for (let i = 0; i < GRID_SIZE; i++) {
-                for (let j = 0; j < GRID_SIZE; j++) {
-                    let neighborCount = 0;
-                    // Check all 8 neighbors
-                    for (let x = -1; x <= 1; x++) {
-                        for (let y = -1; y <= 1; y++) {
-                            if (x === 0 && y === 0) continue; // Skip the cell itself
-                            const ni = (i + x + GRID_SIZE) % GRID_SIZE;
-                            const nj = (j + y + GRID_SIZE) % GRID_SIZE;
-                            neighborCount += grid[ni][nj];
-                        }
-                    }
-
-                    // Apply the rules of the game
-                    if (grid[i][j] === 1 && (neighborCount < 2 || neighborCount > 3)) {
-                        nextGrid[i][j] = 0; // A live cell dies
-                    } else if (grid[i][j] === 0 && neighborCount === 3) {
-                        nextGrid[i][j] = 1; // A dead cell becomes alive
-                    }
-                }
+        function drawHead(x, y, color, label = '') {
+            ctx.beginPath();
+            ctx.arc(x, y, HEAD_RADIUS, 0, 2 * Math.PI);
+            ctx.fillStyle = color;
+            ctx.fill();
+            if (label) {
+                ctx.fillStyle = 'black';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(label, x, y);
             }
-            grid = nextGrid; // Update the main grid
         }
 
-        /** The main animation loop. */
-        function update() {
-            if (!isRunning) return; // Stop the loop if paused
-            nextGeneration();
+        function drawAll() {
             drawGrid();
-            animationId = requestAnimationFrame(update); // Schedule the next frame
+            // Draw A's head
+            drawHead(state.a_head.x, state.a_head.y, '#FFC107', 'Ha');
+            // Draw h-counter heads
+            state.h_heads.forEach(h => drawHead(h.x, h.y, '#03A9F4', 'Bh'));
+            // Draw v-counter heads
+            state.v_heads.forEach(v => drawHead(v.x, v.y, '#8BC34A', 'Bv'));
+            // Draw animation head if it exists
+            if (state.anim_head) {
+                drawHead(state.anim_head.x, state.anim_head.y, '#F44336', state.anim_head.label);
+            }
         }
 
-        // --- Button Controls ---
-        const startStopBtn = document.getElementById('startStopBtn');
-        const stepBtn = document.getElementById('stepBtn');
-        const resetBtn = document.getElementById('resetBtn');
+        // --- Animation Logic ---
+        function animate(animationSteps, onComplete) {
+            let step = 0;
 
-        startStopBtn.addEventListener('click', () => {
-            isRunning = !isRunning;
-            if (isRunning) {
-                startStopBtn.textContent = 'Stop';
-                update(); // Start the animation loop
-            } else {
-                startStopBtn.textContent = 'Start';
-                cancelAnimationFrame(animationId); // Stop the animation loop
+            function loop() {
+                if (step >= animationSteps.length) {
+                    if (onComplete) onComplete();
+                    return;
+                }
+                animationSteps[step]();
+                step++;
+                requestAnimationFrame(loop);
             }
-        });
+            loop();
+        }
 
-        stepBtn.addEventListener('click', () => {
-            if (!isRunning) {
-                nextGeneration();
-                drawGrid();
+        // --- Button Actions ---
+        function reset() {
+            state = {
+                a_head: {
+                    x: 1.5 * CELL_SIZE,
+                    y: 0.5 * FIELD_HEIGHT
+                },
+                h_heads: [{
+                    x: 2.5 * CELL_SIZE,
+                    y: 1.5 * FIELD_HEIGHT
+                }, {
+                    x: 3.5 * CELL_SIZE,
+                    y: 1.5 * FIELD_HEIGHT
+                }],
+                v_heads: [{
+                    x: 1.5 * CELL_SIZE,
+                    y: 2.5 * FIELD_HEIGHT
+                }],
+                anim_head: null
+            };
+            drawAll();
+            explanationEl.textContent = "State has been reset. Press a button.";
+        }
+
+        document.getElementById('stepBtn').addEventListener('click', () => {
+            explanationEl.textContent = "Simulating one step of TM A...";
+            const startX = state.a_head.x;
+            const endX = startX + CELL_SIZE;
+            const steps = [];
+            for (let i = 0; i < 30; i++) {
+                steps.push(() => {
+                    state.a_head.x = startX + (endX - startX) * (i / 29);
+                    drawAll();
+                });
             }
+            animate(steps, () => {
+                state.v_heads.push({
+                    x: 4.5 * CELL_SIZE,
+                    y: 2.5 * FIELD_HEIGHT
+                });
+                drawAll();
+                explanationEl.textContent = "A's head moved right and the volume counter was updated.";
+            });
         });
 
-        resetBtn.addEventListener('click', () => {
-            isRunning = false;
-            startStopBtn.textContent = 'Start';
-            cancelAnimationFrame(animationId);
-            grid = createGrid();
-            drawGrid();
+        document.getElementById('carryBtn').addEventListener('click', () => {
+            reset();
+            explanationEl.textContent = "Triggering a carry. A head is borrowed from the 'h' counter.";
+            // Pre-condition for carry
+            state.v_heads.push({
+                x: 2.5 * CELL_SIZE,
+                y: 2.5 * FIELD_HEIGHT
+            });
+            drawAll();
+
+            setTimeout(() => {
+                const borrowedHead = state.h_heads.pop();
+                state.anim_head = {...borrowedHead,
+                    label: 'Bc'
+                }; // Now an animation head
+                const steps = [];
+
+                // 1. Move to v-counter
+                for (let i = 0; i < 20; i++) steps.push(() => {
+                    state.anim_head.y += FIELD_HEIGHT / 19;
+                    drawAll();
+                });
+                // 2. Move left to resolve carry
+                for (let i = 0; i < 20; i++) steps.push(() => {
+                    state.anim_head.x -= CELL_SIZE / 19;
+                    drawAll();
+                });
+                // 3. Move to return track
+                for (let i = 0; i < 20; i++) steps.push(() => {
+                    state.anim_head.y += FIELD_HEIGHT / 19;
+                    state.anim_head.label = 'Br';
+                    drawAll();
+                });
+                // 4. Move back
+                for (let i = 0; i < 20; i++) steps.push(() => {
+                    state.anim_head.x += CELL_SIZE / 19;
+                    drawAll();
+                });
+                // 5. Move to h-counter
+                for (let i = 0; i < 40; i++) steps.push(() => {
+                    state.anim_head.y -= 2 * FIELD_HEIGHT / 39;
+                    drawAll();
+                });
+
+                animate(steps, () => {
+                    state.h_heads.push({
+                        x: state.anim_head.x,
+                        y: 1.5 * FIELD_HEIGHT
+                    });
+                    state.anim_head = null;
+                    // Final state of v-counter
+                    state.v_heads = [{
+                        x: 3.5 * CELL_SIZE,
+                        y: 2.5 * FIELD_HEIGHT
+                    }];
+                    drawAll();
+                    explanationEl.textContent = "Carry is resolved. The head returned to its row.";
+                });
+            }, 1000);
         });
 
-        // --- Initial Setup ---
-        grid = createGrid();
-        drawGrid();
+        document.getElementById('densityBtn').addEventListener('click', () => {
+            reset();
+            explanationEl.textContent = "A gap was created in the 'h' counter. Fixing density...";
+            state.h_heads.pop(); // Create a gap
+            drawAll();
+
+            setTimeout(() => {
+                const headToMove = state.h_heads[0];
+                const startX = headToMove.x;
+                const endX = startX + CELL_SIZE; // Move right to fill gap
+                const steps = [];
+                for (let i = 0; i < 30; i++) {
+                    steps.push(() => {
+                        headToMove.x = startX + (endX - startX) * (i / 29);
+                        drawAll();
+                    });
+                }
+                animate(steps, () => explanationEl.textContent = "The gap 'ripples' left as heads shift to fill it.");
+            }, 1000);
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', reset);
+
+        // Initial Draw
+        reset();
     </script>
 </body>
 
